@@ -1,0 +1,101 @@
+#! /bin/bash
+
+# myvcs
+
+if [ $1 = "init" ]; then
+	#echo "init"
+	if [ ! -d ".$2" ]; then
+		mkdir .$2
+	fi
+
+	if [ -f ".$2/$2.currentVersion" ]; then
+		echo "File $2 already initialized"
+		exit 1
+	fi
+	echo "-1" > .$2/$2.currentVersion
+fi
+
+
+if [ $1 = "commit" ]; then
+	#echo "commit"
+	if [ ! -f ".$2/$2.currentVersion" ]; then
+		echo "File $2 not initialized"
+		exit 1
+	fi
+	
+	read version  < .$2/$2.currentVersion
+	if [ $version = -1 ]; then
+		cp $2 .$2/$2.init
+		diff -u $2 $2 > .$2/$2.0
+		echo "0" > .$2/$2.currentVersion
+		cp $2 .$2/$2.currentContent
+	fi
+	diff -u $2 .$2/$2.init > .$2/$2.temp
+	diff -u .$2/$2.temp .$2/$2.$version &> /dev/null
+	if [ $? -ne 0 ]; then
+		diff -u $2 .$2/$2.currentContent &> /dev/null
+		if [ $? -ne 0 ]; then
+		((version=$version+1))
+		cp .$2/$2.temp .$2/$2.$version
+		echo $version > .$2/$2.currentVersion
+		cp $2 .$2/$2.currentContent
+		fi
+	fi
+fi
+
+
+if [ $1 = "status" ]; then
+	#echo "status" 
+	if [ ! -f ".$2/$2.currentVersion" ]; then
+		echo "File $2 not initialized"
+		exit 1
+	fi
+	if [ ! -f ".$2/$2.0" ]; then
+		echo "No commits of $2 yet"
+		exit 1
+	fi
+
+	read version < .$2/$2.currentVersion
+	diff -u $2 .$2/$2.init > .$2/$2.temp
+	diff -u .$2/$2.temp .$2/$2.$version &> /dev/null
+	if [ $? -ne 0 ]; then
+		echo "File $2 has been changed"
+		exit 1
+	fi
+	echo "File $2 hasn't been changed"
+	exit 0
+fi
+
+
+if [ $1 = "diff" ]; then
+	#echo "diff"
+	if [ ! -f ".$2/$2.currentVersion" ]; then
+		echo "File $2 not initialized"
+		exit 1
+	fi
+	if [ ! -f ".$2/$2.0" ]; then
+		echo "No commits of $2 yet"
+		exit 1
+	fi
+	diff -u $2 .$2/$2.currentContent
+fi
+
+if [ $1 = "update" ]; then
+	#echo "update" 
+	if [ ! -f ".$2/$2.currentVersion" ]; then
+		echo "File $2 not initialized"
+		exit 1
+	fi
+	if [ ! -f ".$2/$2.0" ]; then
+		echo "No commits of $2 yet"
+		exit 1
+	fi
+	read version < .$2/$2.currentVersion
+	if [ $version -lt $3 ]; then
+		echo "Version $3 of file $2 does not exist"
+		exit 1
+	fi
+	cp .$2/$2.init .$2/$2.temp
+	patch -R .$2/$2.temp .$2/$2.$3 &> /dev/null
+	cp .$2/$2.temp $2
+fi

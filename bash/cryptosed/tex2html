@@ -1,0 +1,73 @@
+#!/bin/bash
+
+in="/dev/stdin"
+out="/dev/stdout"
+
+sed '{
+	s/^[ ]*//
+	s/[ ]*$//
+	s/  */ /g
+
+	1 s/.*/<html>\
+<head>\
+    <meta http-equiv="Content-Type" content="text\/html; charset=UTF-8" \/>\
+    <title>&<\/title>\
+<\/head>\
+<body>/
+	2,$ {
+		/.*%.*/ {
+			d
+		}
+		
+		/^\\section{[^}]*}$/ {
+				s/^\\section{\([^}]*\)}$/<h1>\1<\/h1>/
+				x
+				s/..*/<p>&<\/p>/
+				}
+		/^\\subsection{[^}]*}$/ {
+				s/^\\subsection{\([^}]*\)}$/<h2>\1<\/h2>/
+				x
+				s/..*/<p>&<\/p>/
+				}
+		
+		/^[^<]/ {
+			$ !{
+				H	
+				d	
+			}			
+			
+			$ {
+				H
+				x
+				s/.*/<p>&<\/p>/
+			}
+		}
+
+		
+
+			/^$/ {
+				x
+				/.*/ {
+				s/^[<].*/&/
+				s/^[^<].*/<p>&<\/p>/
+				}
+			}
+
+		s/^<p>\n/<p>/
+  		/^<p><\/p>$/ {
+			$ !{
+				d
+			}
+		}
+		
+	}
+	/^$/ {
+		d
+	}	
+	
+	$ s/.*/&\
+<\/body>\
+<\/html>/
+	
+}' <"$in" >"$out"
+

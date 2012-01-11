@@ -1,11 +1,104 @@
 #! /bin/bash -e
 # myvcs
-myname="${0##*/} (PID $$)"
 . /.fetch4merc 
 STARTARG=0
 REFEXISTS=0
 declare -a ARRAY
-declare -a DaemonARRAY
+declare -a DaemonArray
+declare -a array1
+killed=0
+
+Hype()
+{
+	local -a TMP
+	local -a hype
+	$($CopyArray $1 TMP)
+	TMP=( ${TMP[@]} ${hype[@]} )
+	$($CopyArray TMP $2)
+
+}
+
+startDaemon () {
+	exec >/dev/null
+	exec < /dev/null
+	1>&2
+	(
+	trap "" SIGHUP
+
+while :
+do
+	if [ ! -f /$QQEDIR/RequestsNum ];then
+		echo "Possible loss of your last request, file RequestsNum was deleted."
+		cnt=0
+		echo $cnt >"/$QQEDIR/RequestsNum"	
+	else
+		read cnt < /$QQEDIR/RequestsNum	
+	fi
+	
+	if [ ! $cnt = 0 ];then
+		if [ ! -d /$QQEDIR ]; then
+			mkdir /$QQEDIR
+		fi
+		for (( i=0;i<$cnt;i++ )); do
+			if [ -f /$QQEDIR/REFERRER$((i+1)) ];then
+				read temp < /$QQEDIR/REFERRER$((i+1))
+				rm /$QQEDIR/REFERRER$((i+1))
+			else
+				temp="none"
+			fi
+			read temp1 < /$QQEDIR/URL$((i+1))
+			rm /$QQEDIR/URL$((i+1))	
+			DaemonArray=( "${DaemonArray[@]}" "$temp" )
+			DaemonArray=( "${DaemonArray[@]}" "$temp1" )
+		done
+	fi
+
+	if [ $killed = 1 ];then
+		if [ ! ${#array1[@]} = 0 ];then
+			array1=( `cat "/$QQEDIR/.queue"`)
+			Hype array1 DaemonArray
+		fi
+	fi	
+
+
+	
+	if [ ! ${DaemonArray[1]} = "" ];then
+		echo "Downloading:\nReferrer - ${DaemonArray[0]} Url - ${DaemonArray[1]}\n" >>/$QUEUE/.status
+		echo "${DaemonArray[0]} ${DaemonArray[1]} " >>/$QUEUE/.queue
+		echo "To download:\n" >>/$QUEUE/.status
+		for (( i=2;i<${#DaemonArray[@]};i=j ));do
+			((j=i+1))
+			echo "Referrer - ${DaemonArray[${i}]} Url - ${DaemonArray[${j}]}" >>/$QUEUE/.status
+			echo "${DaemonArray[${i}]} ${DaemonArray[${j}]} " >>/$QUEUE/.queue
+			((j=i+2))
+		done
+
+		if [ "${DaemonArray[0]}" = "none" ]; then
+			`$GETELEMFUNC -c -q -P "/Downloads/fetched4you/${DaemonArray[1]}" ${DaemonArray[1]}`
+			echo "`date +%s`  ${DaemonArray[1]}" >>/$QQEDIR/.finished 
+		else
+			`$GETELEMFUNC -c -q -P "/Downloads/fetched4you/${DaemonArray[0]}/${DaemonArray[1]}" ${DaemonArray[1]}`
+			echo "`date +%s` ${DaemonArray[0]} ${DaemonArray[1]}" >>/$QQEDIR/.finished 
+		fi
+		
+		temp3=${#DaemonArray[@]} 
+		((temp3=temp3-1))
+		echo "temp3=$temp3"
+		declare -a DaemonArrayNew=( ${DaemonArray[@]:2:$temp3} )
+		declare -a DaemonArray=( ${DaemonArrayNew[@]:0:$temp3} )
+
+		echo 0 > "/$QQEDIR/RequestsNum"	
+	fi
+	sleep 3
+done
+) &
+PIDNUM=$!
+echo $PIDNUM > /$QQEDIR/Daemon
+disown -h $PIDNUM
+
+}
+
+####
 
 if [ "$1" = "-w" ]; then
 	QQEDIR=$2
@@ -45,6 +138,10 @@ if [ "$1" = "-w" ]; then
 	fi
 	
 	if [ $3 = "-w" ]; then
+		if [ $3 -le "5" ]; then
+			echo "Incorrect request. No URLs." 1>&2
+			exit 1
+		fi
 		QQEDIR=$4
 		STARTARG=4
 	fi
@@ -73,7 +170,7 @@ fi
 
 urlNum=0
 if [[ ! -d $QQEDIR ]];then 
-	mkdir $QQEDIR
+	mkdir /$QQEDIR
 fi
 
 for (( i=$STARTARG; i<${#ARGS[@]}; i++)); do
@@ -83,106 +180,57 @@ for (( i=$STARTARG; i<${#ARGS[@]}; i++)); do
 	fi	
 		
 	if [ "${ARGS[${i}]}" = "-r" ]; then
-		echo "Incorrect request. -r in a wrong place." 1>&2
-		exit 1
+		((j=i+1))
+		if [ "${ARGS[${j}]}" = "-r" ]; then
+			echo "Incorrect request. -r -r." 1>&2
+			exit 1
+		fi
+
+		if [ "${ARGS[${j}]}" = "-w" ]; then
+			echo "Incorrect request. -w in a wrong place." 1>&2
+			exit 1
+		fi
+
+		if [ $j -lt ${#ARGS[@]} ];then	
+			REFERRER=${ARGS[${j}]}
+			REFEXISTS=1
+			((i=i+1))	
+		else 
+			echo "Incorrect request. Not enough arguments for -r." 1>&2
+			exit 1
+		fi
 	fi
+
 	((rqstNum=$rqstNum+1))
 	((urlNum=$urlNum+1))
 	ARRAY[$urlNum]=${ARGS[${i}]}
 	
 done
 
+for (( i=1;i<=$urlNum;i++ )); do
+	echo $(($rqstNum-$urlNum+$i)) > "/$QQEDIR/RequestsNum"	
+	if [ ! "$REFERRER" = "" ]; then
+		echo $REFERRER > "/$QQEDIR/REFERRER$(($rqstNum-$urlNum+$i))"
+	fi
+	echo ${ARRAY[${i}]} > "/$QQEDIR/URL$(($rqstNum-$urlNum+$i))"		
+done
 
-if [  -f $QQEDIR/Daemon ];then 
-	if [ $urlNum > 0 ];then
-		for (( i=1;i<=$urlNum;i++ )); do
-			echo $(($rqstNum-$urlNum+$i)) >"$QQEDIR/RequestsNum"	
-			echo $REFERRER > "$QQEDIR/REFERRER$(($rqstNum-$urlNum+$i))"
-			echo ${ARRAY[${i}]} > "$QQEDIR/URL$(($rqstNum-$urlNum+$i))"		
-		done
-	else
-		echo "No URLs" 1>&2
-	fi	
-
+if [  -f /$QQEDIR/Daemon ];then 
+	read PIDNUM < /$QQEDIR/Daemon
+	if  ! `ps -A |grep ${PIDNUM}|grep fetch4me >> /dev/null` 
+	then
+		killed=1
+		startDaemon
+	fi
 else
-
-	for (( i=1;i<=$urlNum;i++ )); do
-		echo $(($rqstNum-$urlNum+$i)) >"$QQEDIR/RequestsNum"	
-		echo $REFERRER > "$QQEDIR/REFERRER$(($rqstNum-$urlNum+$i))"
-		echo ${ARRAY[${i}]} > "$QQEDIR/URL$(($rqstNum-$urlNum+$i))"		
-	done
-
-
-#trap 'exit 0' HUP  #On SIGHUP , re-read $config
-
-# ENDLESS loop until killer by signal 15 :
-exec >/dev/null
-exec < /dev/null
-1>&2
-(
-trap "" SIGHUP
-
-while :
-do
-#touch $QQEDIR/Daemon
-#write PID make!
-if [ ! -f $QQEDIR/RequestsNum ] ;then
-	echo "Error deleting files" 1&>2
-	s=0
-	echo $s >"$QQEDIR/RequestsNum"	
-	fi
-
-
-	read s < $QQEDIR/RequestsNum	
-	echo "s=$s"
-
-	if [ ! $s = 0 ];then
-		for (( i=0;i<=$((s-1));i++ )); do
-			read temp < $QQEDIR/REFERRER$((i+1))
-			read temp1 < $QQEDIR/URL$((i+1))
-			rm $QQEDIR/REFERRER$((i+1))
-			rm $QQEDIR/URL$((i+1))	
-			DaemonARRAY=( "${DaemonARRAY[@]}" "$temp" ) # Mbe not working
-			DaemonARRAY=( "${DaemonARRAY[@]}" "$temp1" ) # Mbe not working
-			echo "DaemonArray $((i*2)) = ${DaemonARRAY[$((2*i))]}"
-			echo "DaemonArray $((2*i+1)) = ${DaemonARRAY[$((2*i+1))]}"
-		done
-		echo 0 > "$QQEDIR/RequestsNum"	
-	fi
-	
- if [ ! ${DaemonARRAY[1]} = "" ];then
-
-echo "Downloading now- Referrer-${DaemonARRAY[0]} Url-${DaemonARRAY[1]} " >>$QUEUE/.status
-echo "Downloading queue:" >>$QUEUE/.status
-for (( i=2;i<${#DaemonARRAY[@]};i++ ));do
-echo "${DaemonARRAY[${i}]}" >>$QUEUE/.status
-done
-for (( i=2;i<${#DaemonARRAY[@]};i++ ));do
-echo "${DaemonARRAY[${i}]}" >>$QUEUE/.queue
-done
-`$GETELEMFUNC -q -P "/Downloads/fetched4you/${DaemonARRAY[0]}/${DaemonARRAY[1]}" ${DaemonARRAY[1]}`
-	
-	echo "`date +%s` ${DaemonARRAY[0]} ${DaemonARRAY[1]}" >>$QQEDIR/.finished 
-
-	temp3=${#DaemonARRAY[@]} 
-	((temp3=temp3-1))
-	echo "temp3=$temp3"
-	declare -a DaemonARRAYNEW=( ${DaemonARRAY[@]:2:$temp3} )
-	declare -a DaemonARRAY=( ${DaemonARRAYNEW[@]:0:$temp3} )
-	echo "DaemonARRAY=${DaemonARRAY[@]}"
-	echo "DaemonARRAYNEW=${DaemonARRAYNEW[@]}"
-	
-	echo 0 > "$QQEDIR/RequestsNum"	
-	fi
-
-touch $QQEDIR/.finished
-prov= stat --format %Z $QQEDIR/.finished
-echo $prov	   
-	
-sleep 3
-done
-) &
+	touch /$QQEDIR/Daemon
+	touch /$QQEDIR/.queue
+	touch /$QQEDIR/.status
+	touch /$QQEDIR/.finished
+	startDaemon
 fi
+
+
 
 
 

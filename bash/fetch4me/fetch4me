@@ -18,7 +18,39 @@ Hype()
 
 }
 
-startDaemon () {
+wgetErrors()
+{
+	1>&2
+	(
+	if [ "$?" = 1 ]; then
+		echo "Generic error."
+		exit 1
+	elif [ "$?" = 2 ]; then
+		echo "Parse error."
+		exit 1
+	elif [ "$?" = 3 ]; then
+		echo "File I/O error."
+		exit 1
+	elif [ "$?" = 4 ]; then
+		echo "Network failure."
+		exit 1
+	elif [ "$?" = 5 ]; then
+		echo "SSL verification failure."
+		exit 1
+	elif [ "$?" = 6 ]; then
+		echo "Username/password authentication failure."
+		exit 1
+	elif [ "$?" = 7 ]; then
+		echo "Protocol error."
+		exit 1
+	elif [ "$?" = 8 ]; then
+		echo "Server issued an error response."
+		exit 1
+	fi
+	)
+}
+
+startDaemon() {
 	exec >/dev/null
 	exec < /dev/null
 	1>&2
@@ -74,10 +106,12 @@ do
 		done
 
 		if [ "${DaemonArray[0]}" = "none" ]; then
-			`$GETELEMFUNC -c -q -P "/Downloads/fetched4you/${DaemonArray[1]}" ${DaemonArray[1]}`
+			`$GETELEMFUNC -c -q -P "/Downloads/fetched4you/${DaemonArray[1]}" ${DaemonArray[1]}` &> /dev/null
+			wgetErrors
 			echo "`date +%s`  ${DaemonArray[1]}" >>/$QQEDIR/.finished 
 		else
-			`$GETELEMFUNC -c -q -P "/Downloads/fetched4you/${DaemonArray[0]}/${DaemonArray[1]}" ${DaemonArray[1]}`
+			`$GETELEMFUNC -c -q -P "/Downloads/fetched4you/${DaemonArray[0]}/${DaemonArray[1]}" ${DaemonArray[1]}` &> /dev/null
+			wgetErrors
 			echo "`date +%s` ${DaemonArray[0]} ${DaemonArray[1]}" >>/$QQEDIR/.finished 
 		fi
 		

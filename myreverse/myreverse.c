@@ -1,6 +1,8 @@
 #include <unistd.h>
+#include <stdio.h>
+//#include <stdlib.h>
 
-#define SIZE 5
+#define SIZE 10
 
 void print_reverse (char* buffer, int len) {
 	int i;
@@ -13,22 +15,36 @@ void print_reverse (char* buffer, int len) {
 int main () {
 
 	char buffer[SIZE];
-	int len;
+	int len, i;
+	int offset = 0;
+	int discard_line = 0;
+	int f = 0;
+	int start;
 
-	len = read(0, buffer, SIZE);
+	while (1) {
+		len = read (0, buffer + offset, SIZE - offset);
 
-	while (len > 1) {
-		if (len < SIZE || buffer[SIZE-1] == '\n') {
-			print_reverse(buffer, len);
-		}
-		else {
-			while(1) {
-				len = read(0, buffer, SIZE);
-				if(buffer[len-1] == '\n')
-					break;
+		if(len!=0) {
+			f = 0;
+			start = 0;
+			i = offset;
+			while(i < offset + len) {
+				if(buffer[i] == '\n') {
+					if(!discard_line) {
+						print_reverse(buffer + start, i + 1 - start);
+					}
+					start = i + 1;
+					discard_line = 0;
+					f = 1;
+				}
+				i++;
 			}
+			if(!f && i == SIZE) {
+				discard_line = 1;
+			}
+			memmove(buffer, buffer + start, len + offset - start);
+			offset = (len + offset - start) % SIZE;
 		}
-		len = read(0, buffer, SIZE);
 	}
 
 	return 0;

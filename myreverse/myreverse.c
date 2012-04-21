@@ -45,7 +45,11 @@ int main () {
 			memmove(buffer, buffer + start, len + offset - start);
 			offset = (len + offset - start) % SIZE;
 		}
+		else {
+			break;
+		}
 	}
 
 	return 0;
 }
+
